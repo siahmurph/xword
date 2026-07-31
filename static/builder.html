@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build a Puzzle — The Crossword Shelf</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="topbar">
+  <div>
+    <h1>Build a Puzzle</h1>
+    <div class="sub">recreate a puzzle from a PDF or book scan — keep it open alongside this page</div>
+  </div>
+  <nav><a href="/">← Shelf</a></nav>
+</div>
+
+<div class="container">
+
+  <!-- Step 1: dimensions -->
+  <div class="builder-step active" id="step1">
+    <h3 style="font-family:'Special Elite',monospace">Step 1 — Grid size &amp; title</h3>
+    <div class="field-row">
+      <label>Title</label>
+      <input type="text" id="titleInput" placeholder="e.g. Sunday Book, Puzzle 14">
+    </div>
+    <div class="field-row">
+      <label>Author / source (optional)</label>
+      <input type="text" id="authorInput" placeholder="e.g. Merl Reagle">
+    </div>
+    <div class="dim-form">
+      <div><label>Columns</label><input type="number" id="widthInput" value="15" min="2" max="30"></div>
+      <div><label>Rows</label><input type="number" id="heightInput" value="15" min="2" max="30"></div>
+      <button class="btn primary" id="toStep2">Next: mark black squares →</button>
+    </div>
+  </div>
+
+  <!-- Step 2: black squares -->
+  <div class="builder-step" id="step2">
+    <h3 style="font-family:'Special Elite',monospace">Step 2 — Mark the black squares</h3>
+    <p class="mode-hint">Click a cell to toggle it black/white, matching the puzzle in front of you.</p>
+    <div class="grid-panel" style="display:inline-block">
+      <div id="builder-grid"></div>
+    </div>
+    <div class="actions-row">
+      <button class="btn" id="backTo1">← Back</button>
+      <button class="btn primary" id="toStep3">Next: add clues →</button>
+    </div>
+  </div>
+
+  <!-- Step 3: clues -->
+  <div class="builder-step" id="step3">
+    <h3 style="font-family:'Special Elite',monospace">Step 3 — Enter clues</h3>
+    <p class="mode-hint">Numbers are auto-assigned from your grid. Leave any blank if you'd rather skip it for now.</p>
+    <label class="mode-hint" style="display:flex;align-items:center;gap:0.4rem;cursor:pointer">
+      <input type="checkbox" id="wantSolution"> I also want to enter the answer letters (from an answer key)
+    </label>
+    <div class="solve-wrap" style="margin-top:1rem">
+      <div>
+        <h4 style="font-family:'Courier Prime',monospace">Across</h4>
+        <div id="acrossClues"></div>
+      </div>
+      <div>
+        <h4 style="font-family:'Courier Prime',monospace">Down</h4>
+        <div id="downClues"></div>
+      </div>
+    </div>
+    <div class="actions-row">
+      <button class="btn" id="backTo2">← Back</button>
+      <button class="btn primary" id="saveBtn">Save to shelf</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let width, height;
+let black = new Set();
+let numbering = [];
+let solution = {}; // cellIndex -> letter, only used if wantSolution
+
+function idx(r, c) { return r * width + c; }
+
+document.getElementById('toStep2').addEventListener('click', () => {
+  width = parseInt(document.getElementById('widthInput').value);
+  height = parseInt(document.getElementById('heightInput').value);
+  black = new Set();
+  buildBuilderGrid();
+  showStep(2);
+});
+
+function buildBuilderGrid() {
+  const grid = document.getElementById('builder-grid');
+  grid.id = 'builder-grid';
+  grid.className = '';
+  grid.style.display = 'grid';
+  grid.style.gridTemplateColumns = `repeat(${width}, 36px)`;
+  grid.style.gap = '1px';
+  grid.style.background = 'var(--ink)';
+  grid.style.border = '2px solid var(--ink)';
+  grid.style.width = 'max-content';
+  grid.innerHTML = '';
+  for (let r = 0; r < height; r++) {
+    for (let c = 0; c < width; c++) {
+      const i = idx(r, c);
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.i = i;
+      cell.addEventListener('click', () => {
+        if (black.has(i)) black.delete(i); else black.add(i);
+        cell.classList.toggle('black');
+      });
+      grid.appendChild(cell);
+    }
+  }
+}
+
+document.getElementById('backTo1').addEventListener('click', () => showStep(1));
+
+document.getElementById('toStep3').addEventListener('click', () => {
+  numbering = computeNumbering();
+  buildClueInputs();
+  showStep(3);
+});
+document.getElementById('backTo2').addEventListener('click', () => showStep(2));
+
+function computeNumbering() {
+  const n = new Array(width * height).fill(0);
+  let num = 1;
+  for (let r = 0; r < height; r++) {
+    for (let c = 0; c < width; c++) {
+      const i = idx(r, c);
+      if (black.has(i)) continue;
+      const startsAcross = (c === 0 || black.has(idx(r, c - 1))) && (c + 1 < width && !black.has(idx(r, c + 1)));
+      const startsDown = (r === 0 || black.has(idx(r - 1, c))) && (r + 1 < height && !black.has(idx(r + 1, c)));
+      if (startsAcross || startsDown) { n[i] = num; num++; }
+    }
+  }
+  return n;
+}
+
+function buildClueInputs() {
+  const wantSol = document.getElementById('wantSolution').checked;
+  const acrossDiv = document.getElementById('acrossClues');
+  const downDiv = document.getElementById('downClues');
+  acrossDiv.innerHTML = '';
+  downDiv.innerHTML = '';
+
+  for (let r = 0; r < height; r++) {
+    for (let c = 0; c < width; c++) {
+      const i = idx(r, c);
+      if (black.has(i) || !numbering[i]) continue;
+      const num = numbering[i];
+      const startsAcross = (c === 0 || black.has(idx(r, c - 1))) && (c + 1 < width && !black.has(idx(r, c + 1)));
+      const startsDown = (r === 0 || black.has(idx(r - 1, c))) && (r + 1 < height && !black.has(idx(r + 1, c)));
+      if (startsAcross) acrossDiv.appendChild(clueRow('A', num, wordLen(i, 'across'), wantSol));
+      if (startsDown) downDiv.appendChild(clueRow('D', num, wordLen(i, 'down'), wantSol));
+    }
+  }
+}
+
+function wordLen(cellIdx, dir) {
+  const r = Math.floor(cellIdx / width), c = cellIdx % width;
+  let len = 0;
+  if (dir === 'across') {
+    let cc = c;
+    while (cc < width && !black.has(idx(r, cc))) { len++; cc++; }
+  } else {
+    let rr = r;
+    while (rr < height && !black.has(idx(rr, c))) { len++; rr++; }
+  }
+  return len;
+}
+
+function clueRow(prefix, num, len, wantSol) {
+  const row = document.createElement('div');
+  row.className = 'clue-entry-row';
+  const numSpan = document.createElement('span');
+  numSpan.className = 'num';
+  numSpan.textContent = num + '.';
+  const clueInput = document.createElement('input');
+  clueInput.type = 'text';
+  clueInput.placeholder = `${prefix === 'A' ? 'Across' : 'Down'} ${num} clue (${len} letters)`;
+  clueInput.dataset.key = `${prefix}${num}`;
+  row.appendChild(numSpan);
+  row.appendChild(clueInput);
+  if (wantSol) {
+    const solInput = document.createElement('input');
+    solInput.type = 'text';
+    solInput.placeholder = 'ANSWER';
+    solInput.style.width = '110px';
+    solInput.style.textTransform = 'uppercase';
+    solInput.dataset.solKey = `${prefix}${num}`;
+    solInput.dataset.len = len;
+    row.appendChild(solInput);
+  }
+  return row;
+}
+
+function showStep(n) {
+  document.querySelectorAll('.builder-step').forEach(s => s.classList.remove('active'));
+  document.getElementById('step' + n).classList.add('active');
+}
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  const clueMap = {};
+  document.querySelectorAll('#acrossClues input[type=text], #downClues input[type=text]').forEach(inp => {
+    if (inp.dataset.key) clueMap[inp.dataset.key] = inp.value;
+  });
+
+  // build solution array from any answer entries provided
+  const solArr = new Array(width * height).fill('');
+  const wantSol = document.getElementById('wantSolution').checked;
+  if (wantSol) {
+    document.querySelectorAll('[data-sol-key]').forEach(inp => {
+      const key = inp.dataset.solKey;
+      const dir = key[0] === 'A' ? 'across' : 'down';
+      const num = parseInt(key.slice(1));
+      const startCell = findCellForNumber(num);
+      if (startCell == null) return;
+      const letters = inp.value.toUpperCase().replace(/[^A-Z]/g, '');
+      const cells = wordCells(startCell, dir);
+      for (let k = 0; k < cells.length && k < letters.length; k++) solArr[cells[k]] = letters[k];
+    });
+  }
+
+  const payload = {
+    title: document.getElementById('titleInput').value || 'Untitled',
+    author: document.getElementById('authorInput').value || '',
+    width, height,
+    black: Array.from(black),
+    solution: solArr,
+    clues: clueMap
+  };
+
+  const res = await fetch('/api/puzzles', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (res.ok) {
+    location.href = `/solve.html?id=${data.id}`;
+  } else {
+    alert('Save failed: ' + JSON.stringify(data));
+  }
+});
+
+function findCellForNumber(num) {
+  for (let i = 0; i < numbering.length; i++) if (numbering[i] === num) return i;
+  return null;
+}
+
+function wordCells(cellIdx, dir) {
+  const r = Math.floor(cellIdx / width), c = cellIdx % width;
+  const cells = [];
+  if (dir === 'across') {
+    let cc = c;
+    while (cc < width && !black.has(idx(r, cc))) { cells.push(idx(r, cc)); cc++; }
+  } else {
+    let rr = r;
+    while (rr < height && !black.has(idx(rr, c))) { cells.push(idx(rr, c)); rr++; }
+  }
+  return cells;
+}
+</script>
+</body>
+</html>

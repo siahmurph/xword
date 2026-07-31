@@ -1,0 +1,7 @@
+domain-info.md
+crosswords.db
+data/
+xword-dl-config/
+crossword-shelf.zip
+__pycache__/
+*.pyc

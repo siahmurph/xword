@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Crossword Shelf</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="topbar">
+  <div>
+    <h1>The Crossword Shelf</h1>
+    <div class="sub">a puzzle library for two</div>
+  </div>
+  <nav>
+    <a href="/builder.html">+ Build a Puzzle</a>
+  </nav>
+</div>
+
+<div class="container">
+  <div class="upload-box" id="dropzone">
+    Drop a .puz file here, or click to choose one
+    <input type="file" id="fileInput" accept=".puz" style="display:none">
+  </div>
+
+  <div class="card" style="max-width:520px;margin-top:1.1rem">
+    <div class="title">Download from the web</div>
+    <div class="meta">via <a href="https://github.com/thisisparker/xword-dl" target="_blank" rel="noopener">xword-dl</a> — pulls the latest (or a dated) puzzle straight from the outlet</div>
+    <div class="field-row" style="margin-top:0.4rem">
+      <label>Outlet</label>
+      <select id="outletSelect" style="width:100%;max-width:360px;padding:0.5rem;border:2px solid var(--ink);background:var(--cell);font-family:'Inter',sans-serif"></select>
+    </div>
+    <div class="field-row" id="dateRow" style="display:none">
+      <label>Date (optional — leave blank for latest)</label>
+      <input type="text" id="dateInput" placeholder="e.g. 7/30/26, or 'yesterday'">
+    </div>
+    <div class="field-row">
+      <label>…or paste a puzzle URL instead (overrides outlet above)</label>
+      <input type="text" id="urlInput" placeholder="https://example.com/todays-puzzle">
+    </div>
+    <button class="btn primary" id="fetchBtn">Fetch puzzle</button>
+    <div class="meta" id="fetchStatus" style="margin-top:0.5rem"></div>
+  </div>
+
+  <div class="actions-row">
+    <a class="btn" href="/builder.html">Build from a PDF / scanned puzzle</a>
+  </div>
+
+  <div id="catalog" class="catalog"></div>
+  <div id="emptyState" class="empty-state" style="display:none">
+    No puzzles yet. Import a .puz file above, or build one from a PDF/book scan.
+  </div>
+</div>
+
+<script>
+async function loadPuzzles() {
+  const res = await fetch('/api/puzzles');
+  const puzzles = await res.json();
+  const catalog = document.getElementById('catalog');
+  const empty = document.getElementById('emptyState');
+  catalog.innerHTML = '';
+  if (puzzles.length === 0) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  for (const p of puzzles) {
+    const card = document.createElement('a');
+    card.className = 'card';
+    card.href = `/solve.html?id=${p.id}`;
+
+    const thumb = document.createElement('div');
+    thumb.className = 'thumb';
+    const cols = Math.min(p.width, 15);
+    const rows = Math.min(p.height, 15);
+    thumb.style.gridTemplateColumns = `repeat(${cols}, 6px)`;
+    // fetch black cells lazily via a lightweight endpoint would be nicer; reuse full puzzle for now sparingly
+    catalog.appendChild(card);
+
+    card.innerHTML = `
+      <div class="title">${escapeHtml(p.title || 'Untitled')}</div>
+      <div class="meta">${p.width}×${p.height}${p.author ? ' · ' + escapeHtml(p.author) : ''}${p.has_solution ? '' : ' · no answer key'}</div>
+      <button class="delbtn" data-id="${p.id}">remove</button>
+    `;
+  }
+
+  catalog.querySelectorAll('.delbtn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!confirm('Remove this puzzle from the shelf?')) return;
+      await fetch(`/api/puzzles/${btn.dataset.id}`, { method: 'DELETE' });
+      loadPuzzles();
+    });
+  });
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag');
+  if (e.dataTransfer.files.length) uploadPuz(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) uploadPuz(fileInput.files[0]);
+});
+
+async function uploadPuz(file) {
+  dropzone.textContent = 'Importing…';
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const res = await fetch('/api/import-puz', { method: 'POST', body: form });
+    if (!res.ok) {
+      const err = await res.json();
+      alert('Import failed: ' + (err.detail || res.statusText));
+    }
+  } catch (e) {
+    alert('Import failed: ' + e);
+  }
+  dropzone.textContent = 'Drop a .puz file here, or click to choose one';
+  loadPuzzles();
+}
+
+async function loadOutlets() {
+  const res = await fetch('/api/outlets');
+  const outlets = await res.json();
+  const select = document.getElementById('outletSelect');
+  select.innerHTML = outlets.map(o => `<option value="${o.keyword}" data-date="${o.date}">${escapeHtml(o.name)}</option>`).join('');
+  toggleDateRow();
+}
+
+function toggleDateRow() {
+  const select = document.getElementById('outletSelect');
+  const opt = select.options[select.selectedIndex];
+  document.getElementById('dateRow').style.display = (opt && opt.dataset.date === 'true') ? 'block' : 'none';
+}
+
+document.getElementById('outletSelect').addEventListener('change', toggleDateRow);
+
+document.getElementById('fetchBtn').addEventListener('click', async () => {
+  const url = document.getElementById('urlInput').value.trim();
+  const outlet = document.getElementById('outletSelect').value;
+  const date = document.getElementById('dateInput').value.trim();
+  const source = url || outlet;
+  const status = document.getElementById('fetchStatus');
+  status.textContent = 'Fetching…';
+  try {
+    const res = await fetch('/api/download-puz', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source, date: url ? '' : date })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      status.textContent = data.detail || 'Fetch failed.';
+      status.style.color = 'var(--pencil-red)';
+    } else {
+      status.textContent = 'Added to the shelf!';
+      status.style.color = 'var(--pen)';
+      document.getElementById('urlInput').value = '';
+      document.getElementById('dateInput').value = '';
+      loadPuzzles();
+    }
+  } catch (e) {
+    status.textContent = 'Fetch failed: ' + e;
+    status.style.color = 'var(--pencil-red)';
+  }
+});
+
+loadPuzzles();
+loadOutlets();
+</script>
+</body>
+</html>

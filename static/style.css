@@ -1,0 +1,302 @@
+@import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Courier+Prime:wght@400;700&family=Caveat:wght@500;700&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --paper: #EDE7D9;
+  --paper-light: #F7F4EC;
+  --cell: #FFFEF9;
+  --ink: #1F2320;
+  --ink-soft: #4A4A42;
+  --black-sq: #171916;
+  --pen: #2952A3;
+  --pen-soft: #d9e2f2;
+  --pencil-red: #A8382E;
+  --rule: #c9c0a8;
+  --shadow: 0 2px 0 rgba(31,35,32,0.08);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  background-image:
+    linear-gradient(var(--rule) 1px, transparent 1px);
+  background-size: 100% 2.1em;
+  color: var(--ink);
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+}
+
+a { color: inherit; }
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 1.4rem 1.6rem 1rem;
+  border-bottom: 3px solid var(--ink);
+  background: var(--paper-light);
+  background-image: none;
+}
+
+.topbar h1 {
+  font-family: 'Special Elite', monospace;
+  font-size: 1.5rem;
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+.topbar .sub {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.topbar nav a {
+  text-decoration: none;
+  font-family: 'Courier Prime', monospace;
+  font-weight: 700;
+  font-size: 0.85rem;
+  border: 2px solid var(--ink);
+  padding: 0.4rem 0.8rem;
+  margin-left: 0.6rem;
+  display: inline-block;
+  background: var(--paper-light);
+}
+
+.topbar nav a:hover { background: var(--ink); color: var(--paper-light); }
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.6rem;
+}
+
+/* ---- Library / card catalog ---- */
+.catalog {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.1rem;
+  margin-top: 1.2rem;
+}
+
+.card {
+  background: var(--paper-light);
+  border: 2px solid var(--ink);
+  box-shadow: var(--shadow);
+  padding: 0.9rem;
+  text-decoration: none;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  transition: transform 0.12s ease;
+}
+
+.card:hover { transform: translateY(-2px); }
+
+.card .thumb {
+  display: grid;
+  gap: 1px;
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  align-self: center;
+}
+
+.card .thumb div { background: var(--cell); }
+.card .thumb div.b { background: var(--black-sq); }
+
+.card .title {
+  font-family: 'Special Elite', monospace;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.card .meta {
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  font-family: 'Courier Prime', monospace;
+}
+
+.card .delbtn {
+  align-self: flex-start;
+  font-size: 0.7rem;
+  color: var(--pencil-red);
+  background: none;
+  border: 1px solid var(--pencil-red);
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+  font-family: 'Courier Prime', monospace;
+}
+
+.empty-state {
+  font-family: 'Courier Prime', monospace;
+  color: var(--ink-soft);
+  padding: 2rem 0;
+}
+
+.actions-row {
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.btn {
+  font-family: 'Courier Prime', monospace;
+  font-weight: 700;
+  border: 2px solid var(--ink);
+  background: var(--paper-light);
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  text-decoration: none;
+  color: var(--ink);
+  font-size: 0.9rem;
+  display: inline-block;
+}
+.btn:hover { background: var(--ink); color: var(--paper-light); }
+.btn.primary { background: var(--pen); color: white; border-color: var(--pen); }
+.btn.primary:hover { background: #1d3d80; }
+.btn.small { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
+
+.upload-box {
+  border: 2px dashed var(--ink-soft);
+  padding: 1.2rem;
+  text-align: center;
+  font-family: 'Courier Prime', monospace;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.upload-box.drag { background: var(--pen-soft); border-color: var(--pen); color: var(--ink); }
+
+/* ---- Solve page ---- */
+.solve-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 1.6rem;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .solve-wrap { grid-template-columns: 1fr; }
+}
+
+.grid-panel {
+  background: var(--paper-light);
+  border: 2px solid var(--ink);
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+.puz-title {
+  font-family: 'Special Elite', monospace;
+  font-size: 1.3rem;
+  margin: 0 0 0.9rem;
+}
+
+#grid {
+  display: grid;
+  gap: 1px;
+  background: var(--ink);
+  border: 2px solid var(--ink);
+  width: max-content;
+}
+
+.cell {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  background: var(--cell);
+}
+
+.cell.black { background: var(--black-sq); }
+
+.cell input {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+  text-align: center;
+  text-transform: uppercase;
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 1.4rem;
+  color: var(--pen);
+  padding: 0;
+  outline: none;
+}
+
+.cell input.other-fill { color: var(--pencil-red); }
+
+.cell.active { background: var(--pen-soft); }
+.cell.word-highlight { background: #f3ecd8; }
+
+.cell .num {
+  position: absolute;
+  top: 1px;
+  left: 2px;
+  font-size: 0.55rem;
+  font-family: 'Courier Prime', monospace;
+  color: var(--ink-soft);
+  pointer-events: none;
+}
+
+.clues-panel {
+  background: var(--paper-light);
+  border: 2px solid var(--ink);
+  padding: 1rem;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.clues-panel h3 {
+  font-family: 'Special Elite', monospace;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 0.3rem;
+  margin-top: 1.2rem;
+  font-size: 1rem;
+}
+.clues-panel h3:first-child { margin-top: 0; }
+
+.clue-list { list-style: none; margin: 0; padding: 0; font-size: 0.88rem; }
+.clue-list li {
+  padding: 0.32rem 0.2rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--rule);
+  font-family: 'Inter', sans-serif;
+}
+.clue-list li:hover { background: var(--pen-soft); }
+.clue-list li.active-clue { background: var(--pen); color: white; }
+.clue-list li b { font-family: 'Courier Prime', monospace; margin-right: 0.4rem; }
+
+.status-bar {
+  font-family: 'Courier Prime', monospace;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  margin-top: 0.6rem;
+  display: flex;
+  justify-content: space-between;
+}
+.status-dot { color: var(--pen); }
+
+/* ---- Builder page ---- */
+.builder-step { display: none; }
+.builder-step.active { display: block; }
+.dim-form { display: flex; gap: 0.8rem; align-items: end; flex-wrap: wrap; margin: 1rem 0; }
+.dim-form label { font-family: 'Courier Prime', monospace; font-size: 0.8rem; display: block; margin-bottom: 0.2rem; }
+.dim-form input { padding: 0.4rem; font-size: 1rem; width: 80px; border: 2px solid var(--ink); background: var(--cell); }
+
+#builder-grid .cell { cursor: pointer; }
+#builder-grid .cell input { color: var(--ink); font-family: 'Courier Prime', monospace; font-size: 1.1rem; font-weight: 700; }
+.mode-hint { font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--ink-soft); margin: 0.6rem 0; }
+
+.clue-entry-row { display: flex; gap: 0.6rem; align-items: center; margin-bottom: 0.4rem; }
+.clue-entry-row .num { width: 2.2rem; font-family: 'Courier Prime', monospace; font-weight: 700; }
+.clue-entry-row input[type=text] {
+  flex: 1; padding: 0.4rem 0.5rem; border: 1px solid var(--ink-soft); font-family: 'Inter', sans-serif;
+}
+
+.field-row { margin-bottom: 0.8rem; }
+.field-row label { display: block; font-family: 'Courier Prime', monospace; font-size: 0.8rem; margin-bottom: 0.25rem; }
+.field-row input[type=text] { width: 100%; max-width: 360px; padding: 0.5rem; border: 2px solid var(--ink); background: var(--cell); font-family: 'Inter', sans-serif; }

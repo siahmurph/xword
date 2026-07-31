@@ -1,0 +1,16 @@
+services:
+  crossword-shelf:
+    image: ghcr.io/siahmurph/xword:latest
+    container_name: crossword-shelf
+    restart: unless-stopped
+    ports:
+      - "8099:8099"
+    volumes:
+      # crosswords.db lives here — back this dir up (it's what the LXC's
+      # nightly rsync-to-Synology job should pick up if pointed at
+      # /opt/appdata/crossword-shelf, matching the other containers on this host)
+      - ./data:/data
+      # persists `xword-dl nyt --authenticate` token across container rebuilds
+      - ./xword-dl-config:/root/.config/xword-dl
+    # environment:
+    #   - TZ=America/New_York   # uncomment/set to your local timezone if desired

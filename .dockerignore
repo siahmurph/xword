@@ -1,0 +1,7 @@
+crosswords.db
+data/
+xword-dl-config/
+crossword-shelf.zip
+.git
+__pycache__/
+*.pyc
