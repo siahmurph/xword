@@ -225,15 +225,36 @@ function findNextWhite(from, step) {
   return i;
 }
 
-// iOS/iPadOS's on-screen keyboard does not reliably fire `keydown` at all —
-// only `beforeinput`/`input` — so backspace-on-an-already-empty-cell (the
-// "chain delete back through the word" gesture) has to be detected there,
-// not in onKeyDown. beforeinput fires for hardware keyboards too, so this
-// single handler covers both.
+// Backspace-on-an-already-empty-cell ("chain delete back through the word")
+// is detected from two different events because iPadOS versions vary on
+// which they actually fire from the on-screen keyboard: `beforeinput`
+// (modern, most reliable) and `keydown` (older/some versions). The
+// `backspaceHandled` guard stops both from firing the same physical
+// keypress twice on devices where both events show up.
+//
+// The actual cell-jump is deferred with setTimeout(..., 0) rather than run
+// synchronously inside the event handler: changing focus to a different
+// <input> from inside the keyboard's own edit event can desync which field
+// the on-screen keyboard thinks it's typing into on iPadOS, which is what
+// made chain-delete stop after one hop (had to tap each cell manually
+// after the first backspace). Letting the current event finish first
+// avoids that.
+let backspaceHandled = false;
+function handleEmptyBackspace(i) {
+  if (backspaceHandled) return;
+  backspaceHandled = true;
+  // Reset in the same deferred tick that performs the move: this only
+  // needs to dedupe keydown+beforeinput firing for the *same* physical
+  // keypress (which land in the same task, back to back), not throttle
+  // separate keypresses — a longer window would eat legitimate rapid
+  // repeated backspaces.
+  setTimeout(() => { backspaceHandled = false; movePrev(i, true); }, 0);
+}
+
 function onBeforeInput(e, i) {
   if (e.inputType === 'deleteContentBackward' && !e.target.value) {
     e.preventDefault();
-    movePrev(i, true);
+    handleEmptyBackspace(i);
   }
 }
 
@@ -246,11 +267,15 @@ function onInput(e, i) {
 }
 
 function onKeyDown(e, i) {
+  if (e.key === 'Backspace' && !e.target.value) {
+    e.preventDefault();
+    handleEmptyBackspace(i);
+  }
   // Arrow-key navigation only matters for hardware/Bluetooth keyboards —
   // iPad's on-screen keyboard has no arrow keys — but an explicit arrow
   // press is a deliberate directional choice, so it's allowed to set the
   // master direction (same as clicking a clue).
-  if (e.key === 'ArrowRight') { e.preventDefault(); direction = 'across'; setActive(idx(Math.floor(i / puzzle.width), (i % puzzle.width) + 1)); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); direction = 'across'; setActive(idx(Math.floor(i / puzzle.width), (i % puzzle.width) + 1)); }
   else if (e.key === 'ArrowLeft') { e.preventDefault(); direction = 'across'; setActive(idx(Math.floor(i / puzzle.width), (i % puzzle.width) - 1)); }
   else if (e.key === 'ArrowDown') { e.preventDefault(); direction = 'down'; setActive(i + puzzle.width); }
   else if (e.key === 'ArrowUp') { e.preventDefault(); direction = 'down'; setActive(i - puzzle.width); }
