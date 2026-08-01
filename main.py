@@ -12,6 +12,9 @@ from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect, H
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from numbering import compute_numbering
+from pdf_import import PdfImportError, resolve_pdf_bytes, extract_puzzle_from_pdf
+
 BASE_DIR = Path(__file__).parent
 DB_PATH = Path(os.environ.get("DB_PATH", BASE_DIR / "crosswords.db"))
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -54,27 +57,6 @@ def init_db():
 
 
 init_db()
-
-
-# ---------- numbering helper (standard crossword numbering) ----------
-def compute_numbering(width: int, height: int, black: set) -> List[int]:
-    numbering = [0] * (width * height)
-    num = 1
-    for r in range(height):
-        for c in range(width):
-            i = r * width + c
-            if i in black:
-                continue
-            starts_across = (c == 0 or (r * width + c - 1) in black) and (
-                c + 1 < width and (i + 1) not in black
-            )
-            starts_down = (r == 0 or ((r - 1) * width + c) in black) and (
-                r + 1 < height and (i + width) not in black
-            )
-            if starts_across or starts_down:
-                numbering[i] = num
-                num += 1
-    return numbering
 
 
 def build_clue_lists(width, height, black, numbering, clue_text_map):
@@ -296,6 +278,27 @@ def download_puz(payload: Dict = Body(...)):
 
 
 # ---------- API: manual builder save ----------
+# ---------- API: scrape a puzzle link into a builder draft (no OCR) ----------
+@app.post("/api/scrape-puzzle")
+def scrape_puzzle(payload: Dict = Body(...)):
+    """
+    payload: {"url": "https://..."} — either a direct PDF link or a page
+    that links to one. Returns a draft {title, width, height, black, clues}
+    for the manual builder to pre-fill; nothing is saved to the library yet.
+    Only works for PDFs with a real vector-drawn grid + text layer (i.e.
+    not scanned/photographed pages) — raises a clear error otherwise.
+    """
+    url = (payload.get("url") or "").strip()
+    if not url:
+        raise HTTPException(400, "Provide a puzzle URL.")
+    try:
+        pdf_bytes = resolve_pdf_bytes(url)
+        draft = extract_puzzle_from_pdf(pdf_bytes)
+    except PdfImportError as e:
+        raise HTTPException(400, str(e))
+    return draft
+
+
 @app.post("/api/puzzles")
 def create_puzzle(payload: Dict = Body(...)):
     title = payload.get("title", "Untitled")

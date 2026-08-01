@@ -42,6 +42,17 @@
     <div class="meta" id="fetchStatus" style="margin-top:0.5rem"></div>
   </div>
 
+  <div class="card" style="max-width:520px;margin-top:1.1rem">
+    <div class="title">Scan a puzzle link</div>
+    <div class="meta">paste a link to a puzzle page or a direct PDF — works for PDFs with a real vector grid + text layer (not scanned book pages)</div>
+    <div class="field-row" style="margin-top:0.4rem">
+      <label>Puzzle page or PDF URL</label>
+      <input type="text" id="scrapeUrlInput" placeholder="https://example.com/todays-puzzle or a direct .pdf link">
+    </div>
+    <button class="btn primary" id="scrapeBtn">Scan &amp; pre-fill builder</button>
+    <div class="meta" id="scrapeStatus" style="margin-top:0.5rem"></div>
+  </div>
+
   <div class="actions-row">
     <a class="btn" href="/builder.html">Build from a PDF / scanned puzzle</a>
   </div>
@@ -172,6 +183,32 @@ document.getElementById('fetchBtn').addEventListener('click', async () => {
     }
   } catch (e) {
     status.textContent = 'Fetch failed: ' + e;
+    status.style.color = 'var(--pencil-red)';
+  }
+});
+
+document.getElementById('scrapeBtn').addEventListener('click', async () => {
+  const url = document.getElementById('scrapeUrlInput').value.trim();
+  const status = document.getElementById('scrapeStatus');
+  if (!url) { status.textContent = 'Paste a URL first.'; status.style.color = 'var(--pencil-red)'; return; }
+  status.textContent = 'Scanning…';
+  status.style.color = 'var(--ink-soft)';
+  try {
+    const res = await fetch('/api/scrape-puzzle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      status.textContent = data.detail || 'Scan failed.';
+      status.style.color = 'var(--pencil-red)';
+    } else {
+      sessionStorage.setItem('puzzleDraft', JSON.stringify(data));
+      location.href = '/builder.html?draft=1';
+    }
+  } catch (e) {
+    status.textContent = 'Scan failed: ' + e;
     status.style.color = 'var(--pencil-red)';
   }
 });

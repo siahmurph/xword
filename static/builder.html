@@ -78,13 +78,46 @@ let width, height;
 let black = new Set();
 let numbering = [];
 let solution = {}; // cellIndex -> letter, only used if wantSolution
+let draftClues = null; // {"A1": "clue text", "D3": "..."} from a scanned draft, if any
 
 function idx(r, c) { return r * width + c; }
 
+// If we got here from "Scan a puzzle link", pre-fill step 1's fields from
+// the draft rather than starting blank. The user still walks through all
+// three steps normally — nothing is saved until they hit "Save to shelf" —
+// so this is just a head start, not an auto-import.
+(function loadDraftIfPresent() {
+  if (new URLSearchParams(location.search).get('draft') !== '1') return;
+  const raw = sessionStorage.getItem('puzzleDraft');
+  if (!raw) return;
+  sessionStorage.removeItem('puzzleDraft');
+  let draft;
+  try { draft = JSON.parse(raw); } catch (e) { return; }
+
+  document.getElementById('titleInput').value = draft.title || '';
+  document.getElementById('widthInput').value = draft.width;
+  document.getElementById('heightInput').value = draft.height;
+  draftClues = draft.clues || {};
+
+  const hint = document.createElement('p');
+  hint.className = 'mode-hint';
+  hint.textContent = 'Pre-filled from a scanned link — check the grid size and clues below before saving.';
+  document.getElementById('step1').insertBefore(hint, document.getElementById('step1').firstChild.nextSibling);
+
+  width = draft.width; height = draft.height;
+  black = new Set(draft.black || []);
+})();
+
 document.getElementById('toStep2').addEventListener('click', () => {
-  width = parseInt(document.getElementById('widthInput').value);
-  height = parseInt(document.getElementById('heightInput').value);
-  black = new Set();
+  const newWidth = parseInt(document.getElementById('widthInput').value);
+  const newHeight = parseInt(document.getElementById('heightInput').value);
+  // Keep a draft's pre-filled black squares as long as the user hasn't
+  // changed the dimensions out from under them; a dimension change means
+  // the old indices no longer line up, so start black squares over.
+  if (newWidth !== width || newHeight !== height || !draftClues) {
+    black = new Set();
+  }
+  width = newWidth; height = newHeight;
   buildBuilderGrid();
   showStep(2);
 });
@@ -105,6 +138,7 @@ function buildBuilderGrid() {
       const i = idx(r, c);
       const cell = document.createElement('div');
       cell.className = 'cell';
+      if (black.has(i)) cell.classList.add('black');
       cell.dataset.i = i;
       cell.addEventListener('click', () => {
         if (black.has(i)) black.delete(i); else black.add(i);
@@ -157,6 +191,14 @@ function buildClueInputs() {
       if (startsDown) downDiv.appendChild(clueRow('D', num, wordLen(i, 'down'), wantSol));
     }
   }
+
+  if (draftClues) applyDraftClues();
+}
+
+function applyDraftClues() {
+  document.querySelectorAll('#acrossClues input[type=text], #downClues input[type=text]').forEach(inp => {
+    if (inp.dataset.key && draftClues[inp.dataset.key]) inp.value = draftClues[inp.dataset.key];
+  });
 }
 
 function wordLen(cellIdx, dir) {

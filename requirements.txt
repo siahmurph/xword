@@ -3,3 +3,5 @@ uvicorn[standard]
 puzpy
 python-multipart
 xword-dl
+pymupdf
+requests
