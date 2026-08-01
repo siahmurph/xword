@@ -51,6 +51,7 @@ async function load() {
   if (!res.ok) { document.getElementById('puzTitleTop').textContent = 'Puzzle not found'; return; }
   puzzle = await res.json();
   document.getElementById('puzTitleTop').textContent = puzzle.title || 'Untitled';
+  sizeGridToFit();
   buildGrid();
   buildClueLists();
   connectWs();
@@ -58,11 +59,32 @@ async function load() {
   setActive(firstWhite);
 }
 
+// Picks a cell size that makes the whole grid fit within its panel — no
+// horizontal scrollbar even for a wide 21x21 grid — while staying within a
+// comfortable tap-target range. Re-run on resize/orientation change since
+// the panel's available width changes (e.g. rotating an iPad).
+const MIN_CELL = 24, MAX_CELL = 44, GRID_GAP = 1, GRID_BORDER = 2, SAFETY_MARGIN = 6;
+function sizeGridToFit() {
+  if (!puzzle) return;
+  const panel = document.querySelector('.grid-panel');
+  const style = getComputedStyle(panel);
+  const hPad = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+  const available = panel.clientWidth - hPad - GRID_BORDER * 2 - (puzzle.width - 1) * GRID_GAP - SAFETY_MARGIN;
+  const size = Math.max(MIN_CELL, Math.min(MAX_CELL, Math.floor(available / puzzle.width)));
+  document.getElementById('grid').style.setProperty('--cell-size', size + 'px');
+}
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { sizeGridToFit(); }, 120);
+});
+
 function idx(r, c) { return r * puzzle.width + c; }
 
 function buildGrid() {
   const grid = document.getElementById('grid');
-  grid.style.gridTemplateColumns = `repeat(${puzzle.width}, 36px)`;
+  grid.style.gridTemplateColumns = `repeat(${puzzle.width}, var(--cell-size, 36px))`;
   grid.innerHTML = '';
   for (let r = 0; r < puzzle.height; r++) {
     for (let c = 0; c < puzzle.width; c++) {
@@ -81,10 +103,17 @@ function buildGrid() {
         }
         const input = document.createElement('input');
         input.maxLength = 1;
+        input.autocapitalize = 'characters';
+        input.autocomplete = 'off';
+        input.setAttribute('autocorrect', 'off');
+        input.spellcheck = false;
+        input.inputMode = 'text';
         input.dataset.i = i;
         input.value = puzzle.fill[i] || '';
         input.addEventListener('focus', () => setActive(i));
+        input.addEventListener('dblclick', (e) => { e.preventDefault(); toggleDirection(i); });
         input.addEventListener('keydown', (e) => onKeyDown(e, i));
+        input.addEventListener('beforeinput', (e) => onBeforeInput(e, i));
         input.addEventListener('input', (e) => onInput(e, i));
         cell.appendChild(input);
       }
@@ -150,23 +179,26 @@ function range(start, end, step) {
   return out;
 }
 
+// Direction is "master" state: it only ever changes via toggleDirection()
+// (double-tap/double-click the active cell), an explicit clue click, or an
+// arrow key press. Merely tapping a different cell — including refocusing
+// via the browser's own tab/click handling — must NOT change it, so that
+// staying in "across" keeps every subsequent tap/type in the across realm.
+// The one forced exception: if the current direction has no multi-cell word
+// at the tapped cell at all (an isolated square), fall back to whichever
+// direction actually has a word there.
 function setActive(cellIdx) {
   if (puzzle.black.includes(cellIdx)) return;
-  // toggle direction if clicking the already-active cell
-  if (cellIdx === activeCell) {
-    direction = direction === 'across' ? 'down' : 'across';
-  }
   activeCell = cellIdx;
+
+  if (wordBounds(activeCell, direction).cells.length < 2) {
+    const alt = direction === 'across' ? 'down' : 'across';
+    if (wordBounds(activeCell, alt).cells.length >= 2) direction = alt;
+  }
+
   document.querySelectorAll('.cell').forEach(c => c.classList.remove('active', 'word-highlight'));
   document.querySelectorAll('.clue-list li').forEach(li => li.classList.remove('active-clue'));
 
-  const { cells } = wordBounds(activeCell, direction);
-  // if current direction has no valid word (single cell only) try the other
-  let dir = direction;
-  if (cells.length < 2) {
-    const alt = wordBounds(activeCell, dir === 'across' ? 'down' : 'across');
-    if (alt.cells.length >= 2) { dir = dir === 'across' ? 'down' : 'across'; direction = dir; }
-  }
   const bounds = wordBounds(activeCell, direction);
   bounds.cells.forEach(i => {
     const el = document.querySelector(`.cell[data-i="${i}"]`);
@@ -175,19 +207,34 @@ function setActive(cellIdx) {
   const activeEl = document.querySelector(`.cell[data-i="${activeCell}"]`);
   if (activeEl) activeEl.classList.add('active');
   const input = document.querySelector(`input[data-i="${activeCell}"]`);
-  if (input) input.focus();
+  if (input && document.activeElement !== input) input.focus();
 
-  const clueNum = numberForWordStart(bounds.cells[0], direction);
   const li = document.querySelector(`.clue-list li[data-cell="${bounds.cells[0]}"][data-dir="${direction}"]`);
   if (li) { li.classList.add('active-clue'); li.scrollIntoView({ block: 'nearest' }); }
 }
 
-function numberForWordStart(cellIdx) { return puzzle.numbering[cellIdx]; }
+function toggleDirection(cellIdx) {
+  const alt = direction === 'across' ? 'down' : 'across';
+  if (wordBounds(cellIdx, alt).cells.length >= 2) direction = alt;
+  setActive(cellIdx);
+}
 
 function findNextWhite(from, step) {
   let i = from;
   while (puzzle.black.includes(i) && i < puzzle.width * puzzle.height) i += step;
   return i;
+}
+
+// iOS/iPadOS's on-screen keyboard does not reliably fire `keydown` at all —
+// only `beforeinput`/`input` — so backspace-on-an-already-empty-cell (the
+// "chain delete back through the word" gesture) has to be detected there,
+// not in onKeyDown. beforeinput fires for hardware keyboards too, so this
+// single handler covers both.
+function onBeforeInput(e, i) {
+  if (e.inputType === 'deleteContentBackward' && !e.target.value) {
+    e.preventDefault();
+    movePrev(i, true);
+  }
 }
 
 function onInput(e, i) {
@@ -199,9 +246,11 @@ function onInput(e, i) {
 }
 
 function onKeyDown(e, i) {
-  if (e.key === 'Backspace' && !e.target.value) {
-    movePrev(i, true);
-  } else if (e.key === 'ArrowRight') { e.preventDefault(); direction = 'across'; setActive(idx(Math.floor(i / puzzle.width), (i % puzzle.width) + 1)); }
+  // Arrow-key navigation only matters for hardware/Bluetooth keyboards —
+  // iPad's on-screen keyboard has no arrow keys — but an explicit arrow
+  // press is a deliberate directional choice, so it's allowed to set the
+  // master direction (same as clicking a clue).
+  if (e.key === 'ArrowRight') { e.preventDefault(); direction = 'across'; setActive(idx(Math.floor(i / puzzle.width), (i % puzzle.width) + 1)); }
   else if (e.key === 'ArrowLeft') { e.preventDefault(); direction = 'across'; setActive(idx(Math.floor(i / puzzle.width), (i % puzzle.width) - 1)); }
   else if (e.key === 'ArrowDown') { e.preventDefault(); direction = 'down'; setActive(i + puzzle.width); }
   else if (e.key === 'ArrowUp') { e.preventDefault(); direction = 'down'; setActive(i - puzzle.width); }
